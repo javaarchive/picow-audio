@@ -1,14 +1,25 @@
+# == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
+if(WIN32)
+    set(USERHOME $ENV{USERPROFILE})
+else()
+    set(USERHOME $ENV{HOME})
+endif()
+set(sdkVersion 1.5.1)
+set(toolchainVersion 13_2_Rel1)
+set(picotoolVersion 2.0.0)
+set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
+if (EXISTS ${picoVscode})
+    include(${picoVscode})
+endif()
+# ====================================================================================
 # Copyright (c) 2022 Mr. Green's Workshop https://www.MrGreensWorkshop.com
 # SPDX-License-Identifier: Apache-2.0
-
-set(PICO_SDK_PATH "/Users/wasdwasd0105/pico/pico-sdk")
-
 
 # Set minimum CMake version
 cmake_minimum_required(VERSION 3.17)
 
 # Include the subsidiary .cmake file to get the SDK
-include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+include(pico_sdk_import.cmake)
 
 # Set the name and version of the project
 project(PicoW_USB_BT_Audio VERSION 1.0.0)

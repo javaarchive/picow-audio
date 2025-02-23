@@ -58,5 +58,5 @@ if (NOT EXISTS ${PICO_EXTRAS_PATH})
 endif ()
 
 set(PICO_EXTRAS_PATH ${PICO_EXTRAS_PATH} CACHE PATH "Path to the PICO EXTRAS" FORCE)
-
+message("debug ${PICO_EXTRAS_PATH}")
 add_subdirectory(${PICO_EXTRAS_PATH} pico_extras)
