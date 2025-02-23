@@ -75,10 +75,11 @@ int wifi_auth(){
     char ssid[] = SECRET_WIFI_SSID;
     char password[] = SECRET_WIFI_PASSWORD;
     if (cyw43_arch_wifi_connect_timeout_ms(ssid, password, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
-        set_led_mode_off();
+        // set_led_mode_off();
         return 1;
     } else {
         set_led_mode_on();
+        // yay!
         return 0;
     }
 }
@@ -135,8 +136,10 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
 int main() {
 
     // // enable to use uart see debug info
-    // stdio_init_all();
-    // stdout_uart_init();
+    stdio_init_all();
+    stdout_uart_init();
+
+    printf("init uart.\n");
 
     set_led_mode_pairing();
 
@@ -152,7 +155,7 @@ int main() {
         return -1;
     }
     cyw43_arch_enable_sta_mode();
-    if(wifi_auth()){
+    if(wifi_auth() > 0){
         return -1;
     }
 
@@ -187,6 +190,8 @@ int main() {
 
     set_led_mode_playing();
 
+    // clear queue before starting
+    drain_audio_queue();
 
     while (1) {
         //printf("get_bootsel_button is %d\n", get_bootsel_button());
@@ -206,7 +211,7 @@ int main() {
         // advance
         if (er != ERR_OK) {
             printf("Failed to send UDP packet! error=%d", er);
-            set_led_mode_off();
+            // set_led_mode_off();
         }else{
             packet_index ++;
             if(packet_index > (INT32_MAX - 256)){
