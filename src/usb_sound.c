@@ -9,6 +9,7 @@
 
 #include "pico/stdlib.h"
 #include "pico/usb_device.h"
+#include "pico/util/queue.h"
 #include "lufa/AudioClassCommon.h"
 
 #include "btstack/bt_audio.h"
@@ -29,7 +30,7 @@ CU_REGISTER_DEBUG_PINS(audio_timing)
 static char *descriptor_strings[] =
         {
                 "Raspberry Pi",
-                "Pico W USB Bluetooth Audio",
+                "Pico W USB Audio Magical Adapter",
                 "0123456789AB"
         };
 
@@ -42,6 +43,9 @@ static char *descriptor_strings[] =
 
 #undef AUDIO_SAMPLE_FREQ
 #define AUDIO_SAMPLE_FREQ(frq) (uint8_t)(frq), (uint8_t)((frq >> 8)), (uint8_t)((frq >> 16))
+
+#define FRAME_SIZE 480
+#define AUDIO_CHANNELS 2
 
 #define AUDIO_MAX_PACKET_SIZE(freq) (uint8_t)(((freq + 999) / 1000) * 4)
 #define FEATURE_MUTE_CONTROL 1u
@@ -182,8 +186,8 @@ static const struct audio_device_config audio_device_config = {
                                 .bSampleFrequencyType = count_of(audio_device_config.as_audio.format.freqs),
                         },
                         .freqs = {
-                                AUDIO_SAMPLE_FREQ(44100),
-                               // AUDIO_SAMPLE_FREQ(48000)
+                               // AUDIO_SAMPLE_FREQ(44100),
+                               AUDIO_SAMPLE_FREQ(48000)
                         },
                 },
         },
@@ -261,6 +265,38 @@ static struct {
 uint16_t buffer_counter = 0;
 uint16_t audio_buffer_pool[AUDIO_BUF_POOL_LEN] = {0};
 
+queue_t audio_queue;
+
+void setup_audio_queue(){
+    queue_init(&audio_queue, sizeof(int16_t), FRAME_SIZE * AUDIO_CHANNELS);
+}
+
+void drain_audio_queue(){
+    // when button pressed, drain the queue
+    int16_t *out = malloc(sizeof(int16_t));
+    while(!queue_is_empty(&audio_queue)){
+        queue_try_remove(&audio_queue, out);
+    }
+}
+
+int get_audio_channels(){
+    return AUDIO_CHANNELS;
+}
+
+int get_frame_size(){
+    return FRAME_SIZE;
+}
+
+// returns how many items were drained
+int drain_count_from_queue(int count, int16_t *out){
+    for(int i = 0; i < count; i ++){ 
+        if(queue_try_remove(&audio_queue, out + i * sizeof(int16_t)) == 0){
+            return i;
+        }
+    }
+    return count; // 0 left, so all were drained
+}
+
 
 void _as_audio_packet(struct usb_endpoint *ep) {
     assert(ep->current_transfer);
@@ -269,38 +305,45 @@ void _as_audio_packet(struct usb_endpoint *ep) {
     assert(!(usb_buffer->data_len & 3u));
 
     uint16_t vol_mul = audio_state.vol_mul;
-    int16_t *out = malloc(usb_buffer->data_len);
+    // int16_t *out = malloc(usb_buffer->data_len);
     int16_t *in = (int16_t *) usb_buffer->data;
 
-    uint8_t sample_count = usb_buffer->data_len / 4;
+    uint8_t sample_count = usb_buffer->data_len / (2 * AUDIO_CHANNELS);
 
-    for (int i = 0; i < sample_count * 2; i++) {
-        out[i] = (int16_t) ((in[i] * vol_mul) >> 15u);
+    for (int i = 0; i < sample_count * AUDIO_CHANNELS; i++) {
+        // out[i] = (int16_t) ((in[i] * vol_mul) >> 15u);
+        // out[i] = in[i];
+        if(queue_try_add(&audio_queue, in + i * sizeof(int16_t)) == 0){
+            break;
+        }
     }
     //printf("usb 1ms ~~~~~~~~~~\n");
 
     // New resync func
     // Check if usb_audio_buf_counter is in the range of shared_audio_counter and shared_audio_counter + num_audio_samples_per_sbc_buffer * 2
     // 128 is a not good value; need get from btstack_sbc_encoder_sbc_buffer_length()
-    if (get_bt_buf_counter() < buffer_counter && buffer_counter < (get_bt_buf_counter() + 128 * 2)){
+    /*if (get_bt_buf_counter() < buffer_counter && buffer_counter < (get_bt_buf_counter() + 128 * 2)){
             // If so, wait until more data is written
         buffer_counter += sample_count;
-    }
+    }*/
 
-    for (int i = 0; i < sample_count * 2; i++) {
+    /*for (int i = 0; i < sample_count * 2; i++) {
 
-        if (buffer_counter < AUDIO_BUF_POOL_LEN){
+        /*if (buffer_counter < AUDIO_BUF_POOL_LEN){
         }
         else{
             buffer_counter = 0;
         }
 
-        audio_buffer_pool[buffer_counter] = out[i];
-        buffer_counter++; 
+        audio_buffer_pool[buffer_counter] = out[i];*/
         
-    }
-    set_usb_buf_counter(buffer_counter);
-    free(out);
+        // buffer_counter++; 
+        /*if(queue_try_add(&audio_queue, in[i]) == 0){
+            break;
+        }
+    }*/
+    // set_usb_buf_counter(buffer_counter);
+    // free(out);
     usb_grow_transfer(ep->current_transfer, 1);
     usb_packet_done(ep);
 }
@@ -443,7 +486,7 @@ static void _audio_reconfigure() {
         case 48000:
             break;
         default:
-            audio_state.freq = 44100;
+            audio_state.freq = 48000;
     }
     // todo hack overwriting const
 }
@@ -611,7 +654,7 @@ void * usb_audio_main(void) {
 
     usb_sound_card_init();
 
-    // share the audio pool buf to BT 
+    // idk how concurrency works here
     set_shared_audio_buffer(audio_buffer_pool);
 
     printf("HAHA %04x %04x %04x %04x\n", MIN_VOLUME, DEFAULT_VOLUME, MAX_VOLUME, VOLUME_RESOLUTION);

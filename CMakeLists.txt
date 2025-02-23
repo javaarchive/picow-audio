@@ -89,7 +89,11 @@ target_compile_definitions(PicoW_USB_BT_Audio PRIVATE
         PICO_USBDEV_ISOCHRONOUS_BUFFER_STRIDE_TYPE=1
         PICO_USBDEV_ENABLE_DEBUG_TRACE
 
-        CYW43_LWIP=0
+        CYW43_LWIP=1
+
+        SECRET_WIFI_SSID="$ENV{SECRET_WIFI_SSID}"
+        SECRET_WIFI_PASSWORD="$ENV{SECRET_WIFI_PASSWORD}"
+        SECRET_AIRWIRE_HOST="$ENV{SECRET_AIRWIRE_HOST}"
 )
 
 
@@ -99,15 +103,18 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   pico_btstack_ble
   pico_btstack_classic
   pico_btstack_cyw43
-  pico_cyw43_arch_threadsafe_background
+  pico_cyw43_arch_lwip_threadsafe_background
   pico_btstack_sbc_encoder
   usb_device
   pico_multicore
 )
 
+message("cld debug: ${CMAKE_CURRENT_LIST_DIR}")
+
 # Including header files directly from project directory
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}/src
 )
 
 # Export binaries like hex, bin, and uf2 files.
